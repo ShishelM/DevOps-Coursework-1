@@ -1,0 +1,34 @@
+---
+- name: Gather facts from all hosts
+  hosts: all
+  gather_facts: yes
+
+- name: Prepare Infrastructure (Docker & Common Tools)
+  hosts: monitoring, logging, webservers
+  become: yes
+  roles:
+    - common
+
+- name: Configure Web Servers (Nginx + JSON Logs)
+  hosts: webservers
+  become: yes
+  roles:
+    - web_server
+
+- name: Deploy Monitoring Stack (Prometheus, Grafana, Adapter)
+  hosts: monitoring
+  become: yes
+  roles:
+    - monitoring
+
+- name: Deploy Logging Stack (Elasticsearch, Kibana)
+  hosts: logging
+  become: yes
+  roles:
+    - logging
+
+- name: Setup Filebeat on All Managed Hosts
+  hosts: webservers, monitoring, logging
+  become: yes
+  roles:
+    - filebeat

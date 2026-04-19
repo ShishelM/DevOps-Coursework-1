@@ -1,0 +1,179 @@
+---
+# 1. СОЗДАНИЕ КОНФИГУРАЦИИ PROMETHEUS
+
+- name: Create Prometheus Config
+  copy:
+    content: |
+      global:
+        scrape_interval: 15s
+      scrape_configs:
+        - job_name: 'web_servers'
+          static_configs:
+            - targets: {{ groups['webservers'] | map('regex_replace', '$', ':9100') | list | to_yaml }}
+    dest: /tmp/prometheus.yml
+
+# - name: Create Prometheus Config
+#   copy:
+#     content: |
+#       global:
+#         scrape_interval: 15s
+
+#       # Отправка данных в PostgreSQL (через адаптер)
+#       remote_write:
+#         - url: "http://localhost:9201/write"
+#           write_relabel_configs:
+#             # Оставляем только важные метрики для экономии места в БД
+#             - source_labels: [__name__]
+#               regex: '(node_cpu_seconds_total|node_memory_MemAvailable_bytes|node_filesystem_avail_bytes|nginx_.*)'
+#               action: keep
+
+#       scrape_configs:
+#         - job_name: 'web_servers'
+#           static_configs:
+#             - targets: {{ groups['webservers'] | map('regex_replace', '$', ':9100') | list | to_yaml }}
+#     dest: /tmp/prometheus.yml
+#   when: inventory_hostname == 'prometheus'
+
+# 2. ЗАПУСК КОНТЕЙНЕРОВ (PROMETHEUS И АДАПТЕР)
+- name: Run Prometheus Container
+  shell: "docker rm -f prometheus || true && docker run -d --name prometheus --restart always -p 9090:9090 -v /tmp/prometheus.yml:/etc/prometheus/prometheus.yml prom/prometheus"
+  when: inventory_hostname == 'prometheus'
+
+# # Конфиг для yandex_mdb_postgresql_cluster
+# - name: Run PostgreSQL Prometheus Adapter (Environment Variables Mode)
+#   shell: |
+#     docker rm -f prom-adapter || true
+#     docker run -d --name prom-adapter --restart always -p 9201:9201 \
+#     -e "TS_PROM_PG_HOST={{ db_host }}" \
+#     -e "TS_PROM_PG_PORT=6432" \
+#     -e "TS_PROM_PG_USER={{ db_user }}" \
+#     -e "TS_PROM_PG_PASSWORD={{ db_password }}" \
+#     -e "TS_PROM_PG_DATABASE=prometheus" \
+#     -e "TS_PROM_PG_SSL_MODE=require" \
+#     -e "TS_PROM_PG_USE_TIMESCALEDB=false" \
+#     -e "TS_PROM_PG_PROMETHEUS_NORMALIZED_SCHEMA=true" \
+#     timescale/prometheus-postgresql-adapter:0.6.0
+#   when: inventory_hostname == 'prometheus'
+#   ignore_errors: yes
+
+# 3. ЗАПУСК GRAFANA
+- name: Run Grafana Container
+  shell: |
+    docker rm -f grafana || true
+    docker run -d --name grafana --restart always -p 3000:3000 \
+    -e "GF_SERVER_DOMAIN={{ alb_public_ip }}" \
+    -e "GF_SERVER_ROOT_URL=http://{{ alb_public_ip }}/grafana/" \
+    -e "GF_SERVER_SERVE_FROM_SUB_PATH=true" \
+    -e "GF_SECURITY_ADMIN_PASSWORD=admin" \
+    grafana/grafana
+  when: inventory_hostname == 'grafana'
+
+- name: Wait for Grafana API
+  uri:
+    url: http://localhost:3000/grafana/api/health
+    status_code: 200
+  register: g_status
+  until: g_status.status == 200
+  retries: 20
+  delay: 5
+  when: inventory_hostname == 'grafana'
+
+# 4. НАСТРОЙКА DATA SOURCES В GRAFANA
+- name: Add Prometheus Data Source
+  uri:
+    url: http://localhost:3000/grafana/api/datasources
+    method: POST
+    user: admin
+    password: admin
+    force_basic_auth: yes
+    body_format: json
+    body:
+      name: "Prometheus"
+      type: "prometheus"
+      url: "http://{{ hostvars['prometheus']['ansible_host'] }}:9090"
+      access: "proxy"
+      isDefault: true
+    status_code: [200, 409]
+  when: inventory_hostname == 'grafana'
+
+- name: Add Elasticsearch Data Sources (Nginx & Docker)
+  uri:
+    url: http://localhost:3000/grafana/api/datasources
+    method: POST
+    user: admin
+    password: admin
+    force_basic_auth: yes
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      type: "elasticsearch"
+      url: "http://{{ hostvars['elasticsearch']['ansible_host'] }}:9200"
+      access: "proxy"
+      database: "{{ item.index }}"
+      jsonData:
+        timeField: "@timestamp"
+        esVersion: "7.17.10"
+        interval: "" 
+        logMessageField: "{{ item.msg_field }}"
+        logLevelField: "{{ item.level_field }}"
+    status_code: [200, 409]
+  loop:
+    - { name: "ES-Nginx-Logs", index: "nginx-prod-*", msg_field: "uri", level_field: "http_code" }
+    - { name: "ES-Docker-Infra", index: "docker-infra-*", msg_field: "message", level_field: "level" }
+  when: inventory_hostname == 'grafana'
+
+- name: Add PostgreSQL Archive Data Source
+  uri:
+    url: http://localhost:3000/grafana/api/datasources
+    method: POST
+    user: admin
+    password: admin
+    force_basic_auth: yes
+    body_format: json
+    body:
+      name: "PostgreSQL-Prom-Archive"
+      type: "postgres"
+      url: "{{ db_host }}:6432"
+      access: "proxy"
+      database: "prometheus"
+      user: "prom_user"
+      jsonData:
+        database: "prometheus"
+        sslmode: "require"
+        postgresVersion: 1500
+        timescaledb: true
+      secureJsonData:
+        password: "{{ db_password }}"
+    status_code: [200, 409]
+  when: inventory_hostname == 'grafana'
+
+# 5. ИМПОРТ ДАШБОРДА
+- name: Import Node Exporter Dashboard
+  uri:
+    url: http://localhost:3000/grafana/api/dashboards/import
+    method: POST
+    user: admin
+    password: admin
+    force_basic_auth: yes
+    body_format: json
+    body:
+      dashboard: "{{ lookup('file', 'node_exporter.json') | from_json }}"
+      inputs:
+        - name: "DS_PROMETHEUS"
+          pluginId: "prometheus"
+          value: "Prometheus"
+      overwrite: true
+    status_code: [200, 201, 409]
+  when: inventory_hostname == 'grafana'
+
+- name: Import Custom Nginx JSON Dashboard
+  uri:
+    url: "http://localhost:3000/grafana/api/dashboards/import"
+    method: POST
+    user: admin
+    password: admin
+    force_basic_auth: yes
+    body_format: json
+    body: "{{ lookup('file', 'nginx_json_dashboard.json') | from_json }}"
+    status_code: [200, 201]
+  when: inventory_hostname == 'grafana'

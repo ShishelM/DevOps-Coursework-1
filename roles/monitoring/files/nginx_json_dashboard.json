@@ -1,0 +1,122 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Nginx JSON Analytics",
+    "tags": ["nginx", "elk"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "HTTP Status Codes",
+        "type": "piechart",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "datasource": { "type": "elasticsearch", "uid": "ES-Nginx-Logs" },
+        "options": {
+            "reduceOptions": {
+            "values": true,
+            "calcs": []
+            },
+            "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": ["percent", "value"]
+            },
+            "tooltip": { "mode": "single" },
+            "pieType": "pie"
+        },
+        "targets": [
+            {
+            "alias": "Status Code",
+            "bucketAggs": [
+                {
+                "field": "http_code",
+                "id": "2",
+                "settings": { "min_doc_count": 1, "order": "desc", "orderBy": "_count", "size": "10" },
+                "type": "terms"
+                }
+            ],
+            "metrics": [{ "id": "1", "type": "count" }],
+            "query": "request_time: >0"
+            }
+        ]
+        },
+      {
+        "title": "Avg Request Time (ms)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "ES-Nginx-Logs"
+        },
+        "targets": [
+          {
+            "metrics": [{ "id": "1", "type": "avg", "field": "request_time" }],
+            "bucketAggs": [{ "id": "2", "type": "date_histogram", "field": "@timestamp", "settings": { "interval": "auto" } }],
+            "query": ""
+          }
+        ]
+      },
+      {
+        "title": "Top Requested URIs",
+        "type": "table",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "ES-Nginx-Logs"
+        },
+        "targets": [
+          {
+            "alias": "URI",
+            "bucketAggs": [
+              {
+                "field": "uri",
+                "id": "2",
+                "settings": { "min_doc_count": 1, "order": "desc", "orderBy": "_count", "size": "20" },
+                "type": "terms"
+              }
+            ],
+            "metrics": [{ "id": "1", "type": "count" }],
+            "query": ""
+          }
+        ]
+      },
+      {
+        "title": "Requests per Web Server",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+        "datasource": {
+            "type": "elasticsearch",
+            "uid": "ES-Nginx-Logs"
+        },
+        "targets": [
+            {
+            "metrics": [{ "id": "1", "type": "count" }],
+            "bucketAggs": [
+                {
+                "id": "3",
+                "type": "terms",
+                "field": "host.name.keyword", 
+                "settings": { "min_doc_count": 1, "order": "desc", "orderBy": "_count", "size": "10" }
+                },
+                {
+                "id": "2",
+                "type": "date_histogram",
+                "field": "@timestamp",
+                "settings": { "interval": "auto" }
+                }
+            ],
+            "query": "request_time: >0"
+            }
+        ],
+        "fieldConfig": {
+            "defaults": {
+            "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+            "unit": "reqps"
+            }
+        }
+    }
+    ],
+    "schemaVersion": 36,
+    "refresh": "5s"
+  },
+  "overwrite": true
+}

@@ -1,0 +1,75 @@
+---
+# 1. Запуск Elasticsearch (без изменений)
+- name: Run Elasticsearch
+  shell: "docker rm -f elasticsearch || true && docker run -d --name elasticsearch --restart always -p 9200:9200 -e 'discovery.type=single-node' -e 'ES_JAVA_OPTS=-Xms512m -Xmx512m' elasticsearch:7.17.10"
+  when: inventory_hostname == 'elasticsearch'
+
+# 2. Запуск Kibana с настройками проксирования
+- name: Run Kibana
+  shell: |
+    docker rm -f kibana || true
+    docker run -d --name kibana --restart always -p 5601:5601 \
+    -e "ELASTICSEARCH_HOSTS=http://{{ hostvars['elasticsearch']['ansible_host'] }}:9200" \
+    -e "SERVER_BASEPATH=/kibana" \
+    -e "SERVER_REWRITEBASEPATH=true" \
+    kibana:7.17.10
+  when: inventory_hostname == 'kibana'
+
+- name: Wait for Kibana API
+  uri:
+    url: http://localhost:5601/kibana/api/status 
+  register: k_status
+  until: k_status.status == 200
+  retries: 30
+  delay: 10
+  when: inventory_hostname == 'kibana'
+
+# 4. Создание Index Patterns
+- name: Create Kibana Index Patterns
+  uri:
+    url: "http://localhost:5601/kibana/api/saved_objects/index-pattern/{{ item.id }}"
+    method: POST
+    body_format: json
+    body:
+      attributes:
+        title: "{{ item.pattern }}"
+        timeFieldName: "@timestamp"
+    headers:
+      kbn-xsrf: "true"
+    status_code: [200, 409]
+  loop:
+    - { id: 'nginx-prod-pattern', pattern: 'nginx-prod-*' }
+    - { id: 'docker-infra-pattern', pattern: 'docker-infra-*' }
+  when: inventory_hostname == 'kibana'
+
+- name: Wait for Elasticsearch API to be ready
+  wait_for:
+    port: 9200
+    host: localhost
+    delay: 10      
+    timeout: 60    
+  when: inventory_hostname == 'elasticsearch'
+
+- name: Set Elasticsearch Index Template for Nginx
+  uri:
+    url: "http://localhost:9200/_index_template/nginx_json_template"
+    method: PUT
+    body_format: json
+    body:
+      index_patterns: ["nginx-prod-*"]
+      template:
+        mappings:
+          properties:
+            http_code: { type: "keyword" }
+            uri: { type: "keyword" }
+            request_time: { type: "float" }
+            client_ip: { type: "ip" }
+    status_code: [200, 201]
+  when: inventory_hostname == 'elasticsearch'
+
+- name: Delete old indices to apply new template mapping
+  uri:
+    url: "http://localhost:9200/nginx-prod-*"
+    method: DELETE
+    status_code: [200, 404] 
+  when: inventory_hostname == 'elasticsearch'

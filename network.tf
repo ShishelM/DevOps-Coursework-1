@@ -116,7 +116,7 @@ resource "yandex_vpc_security_group" "monitoring_sg" {
   name       = "monitoring-sg"
   network_id = yandex_vpc_network.develop.id
   
-  # Разрешаем входящий трафик на Grafana (3000) от подсетей веб-серверов (Разрыв цикла)
+  # Разрешаем входящий трафик на Grafana (3000) от подсетей веб-серверов
   ingress {
     protocol       = "TCP"
     port           = 3000
@@ -144,7 +144,7 @@ resource "yandex_vpc_security_group" "logging_sg" {
   name       = "logging-sg"
   network_id = yandex_vpc_network.develop.id
   
-  # Разрешаем входящий трафик на Kibana (5601) от подсетей веб-серверов (Разрыв цикла)
+  # Разрешаем входящий трафик на Kibana (5601) от подсетей веб-серверов
   ingress {
     protocol       = "TCP"
     port           = 5601

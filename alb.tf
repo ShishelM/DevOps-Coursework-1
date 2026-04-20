@@ -70,7 +70,7 @@ allocation_policy {
     }
     location {
       zone_id   = "ru-central1-b"
-      subnet_id = yandex_vpc_subnet.public_b.id # Теперь подсеть определена
+      subnet_id = yandex_vpc_subnet.public_b.id
     }
   }
 
@@ -90,8 +90,8 @@ allocation_policy {
   }
 }
 
-# Вывод публичного IP для финального теста через curl
-output "alb_external_ip" {
-  description = "Public IP address of the ALB. Use this for: curl -v <IP>:80"
-  value       = yandex_alb_load_balancer.web_alb.listener.0.endpoint.0.address.0.external_ipv4_address.0.address
-}
+
+# output "alb_external_ip" {
+#   description = "Public IP address of the ALB. Use this for: curl -v <IP>:80"
+#   value       = yandex_alb_load_balancer.web_alb.listener.0.endpoint.0.address.0.external_ipv4_address.0.address
+# }

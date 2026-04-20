@@ -27,14 +27,13 @@
           # Основной лог в формате JSON
           access_log /var/log/nginx/access.json.log json_analytics;
 
-          # Твой основной сайт
+          # Основной сайт
           location / {
               root /var/www/html;
               index index.html;
           }
 
           # Прокси для Grafana
-
           location /grafana/ {
             proxy_pass http://{{ grafana_internal_ip }}:3000;
             proxy_set_header Host $host;

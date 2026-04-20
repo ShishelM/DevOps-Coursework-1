@@ -92,7 +92,7 @@ resource "yandex_compute_instance" "web_b" {
   }
 }
 
-# 4. MONITORING: Prometheus (Приватная) и Grafana (Публичная)
+# 4. MONITORING: Prometheus (Приватная) и Grafana (Приватная)
 resource "yandex_compute_instance" "prometheus" {
   name        = "prometheus"
   zone        = "ru-central1-a"
@@ -134,7 +134,7 @@ resource "yandex_compute_instance" "grafana" {
   metadata = { user-data = file("./cloud-init.yml") }
 }
 
-# 5. LOGGING: Elasticsearch (Приватная) и Kibana (Публичная)
+# 5. LOGGING: Elasticsearch (Приватная) и Kibana (Приватная)
 resource "yandex_compute_instance" "elasticsearch" {
   name        = "elasticsearch"
   zone        = "ru-central1-a"
@@ -269,7 +269,7 @@ resource "local_file" "inventory" {
   db_user=${var.db_user}
   db_password=${var.db_pass}
   
-  # Внутренние адреса для настройки Nginx Proxy (пригодятся в шаблонах Ansible)
+  # Внутренние адреса для настройки Nginx Proxy
   grafana_internal_ip=${yandex_compute_instance.grafana.network_interface.0.ip_address}
   kibana_internal_ip=${yandex_compute_instance.kibana.network_interface.0.ip_address}
   XYZ

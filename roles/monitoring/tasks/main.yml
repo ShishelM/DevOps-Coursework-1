@@ -1,6 +1,5 @@
 ---
 # 1. СОЗДАНИЕ КОНФИГУРАЦИИ PROMETHEUS
-
 - name: Create Prometheus Config
   copy:
     content: |
@@ -12,6 +11,7 @@
             - targets: {{ groups['webservers'] | map('regex_replace', '$', ':9100') | list | to_yaml }}
     dest: /tmp/prometheus.yml
 
+# Настройка адаптера PostgreSQL, отключено т.к. нет возможности установки extension адаптера в БД
 # - name: Create Prometheus Config
 #   copy:
 #     content: |
@@ -34,7 +34,7 @@
 #     dest: /tmp/prometheus.yml
 #   when: inventory_hostname == 'prometheus'
 
-# 2. ЗАПУСК КОНТЕЙНЕРОВ (PROMETHEUS И АДАПТЕР)
+# 2. ЗАПУСК КОНТЕЙНЕРОВ (PROMETHEUS И АДАПТЕР (отключен))
 - name: Run Prometheus Container
   shell: "docker rm -f prometheus || true && docker run -d --name prometheus --restart always -p 9090:9090 -v /tmp/prometheus.yml:/etc/prometheus/prometheus.yml prom/prometheus"
   when: inventory_hostname == 'prometheus'

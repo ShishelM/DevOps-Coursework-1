@@ -1,5 +1,5 @@
 ---
-# 1. Запуск Elasticsearch (без изменений)
+# 1. Запуск Elasticsearch
 - name: Run Elasticsearch
   shell: "docker rm -f elasticsearch || true && docker run -d --name elasticsearch --restart always -p 9200:9200 -e 'discovery.type=single-node' -e 'ES_JAVA_OPTS=-Xms512m -Xmx512m' elasticsearch:7.17.10"
   when: inventory_hostname == 'elasticsearch'

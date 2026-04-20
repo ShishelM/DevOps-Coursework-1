@@ -59,4 +59,5 @@ ansible-playbook site.yml
 ## Схема проекта
 
 ![Схема проекта](/images/image.png)
+
 ------------------------------
